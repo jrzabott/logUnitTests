@@ -3,22 +3,20 @@ package firstpackage;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.devexperts.logging.Logging;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.*;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.filter.ThresholdFilter;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -27,20 +25,42 @@ import static org.mockito.Mockito.*;
 
 class FirstTestTest {
 
-    private FirstTest firstTest;
+    private static MyAppender appender;
+    private static Configuration config;
+    private final FirstTest firstTest = new FirstTest();
+
+    @BeforeAll
+    static void beforeAll() {
+        appender = new MyAppender();
+    }
 
     @BeforeEach
-    void setUp() {
-        this.firstTest = new FirstTest();
+    void resetAppender() {
+        appender.reset();
+        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+        config = ctx.getConfiguration();
+        config.getRootLogger().addAppender(appender, Level.ALL, ThresholdFilter.createFilter(Level.ALL, Filter.Result.ACCEPT, Filter.Result.DENY));
     }
 
     @AfterEach
     void tearDown() {
+        config.getRootLogger().removeAppender(appender.getName());
     }
 
     @Test
     void returnLetterA() {
         assertThat(firstTest.returnLetterA()).isEqualTo("A");
+    }
+
+    @Test
+    void logAMessageUsingDevexpertsLogging() {
+        firstTest.produceAInfoLog();
+
+        appender.getLogEvents().forEach(e -> System.out.println(Objects.toString(e.getMessage().getFormattedMessage(), "No Content")));
+        appender.getLogMessages().forEach(System.out::println);
+        assertThat(appender.getLogEvents()).hasSize(1);
+        assertThat(appender.getLogMessages()).hasSize(1);
+
     }
 
     @Test
@@ -54,31 +74,50 @@ class FirstTestTest {
         final List<ILoggingEvent> logList = listAppender.list;
         assertThat(logList).hasSize(1);
 
-        logList.forEach(System.out::println);
+        // logList.forEach(System.out::println);
 
     }
 
     @Test
-    void logAMessageUsingDevexpertsLogging() {;
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        final Configuration config = ctx.getConfiguration();
-        MyAppender appender = new MyAppender();
-        config.getRootLogger().addAppender(appender, Level.ALL, ThresholdFilter.createFilter(Level.ALL, Filter.Result.ACCEPT, Filter.Result.DENY));
+    void logAMessageUsingDevexpertsLoggingWithMockAppender() {
+
+        List<String> logMessages = new ArrayList<>();
+        Appender appender = mock(Appender.class);
+        when(appender.getName()).thenReturn("MockAppender");
+        when(appender.ignoreExceptions()).thenReturn(true);
+        final ErrorHandler errorHandler = mock(ErrorHandler.class);
+        when(appender.getHandler()).thenReturn(errorHandler);
+        doAnswer(invocation -> {
+            final Object argument = invocation.getArgument(0);
+            if (argument instanceof LogEvent) {
+                logMessages.add(((LogEvent) argument).getMessage().getFormattedMessage());
+            }
+            return null;
+        }).when(appender).append(any());
+
+        config.getRootLogger().addAppender(appender, Level.ALL, mock(Filter.class));
+        //config.getAppenders().put(appender.getName(), appender);
 
         firstTest.produceAInfoLog();
-
-        final List<LogEvent> logEvents = appender.logEvents;
-        final List<String> logMessages = appender.logMessages;
-        assertThat(logEvents).hasSize(1);
         assertThat(logMessages).hasSize(1);
-        logEvents.forEach(e -> System.out.println(Objects.toString(e.getMessage().getFormattedMessage(), "No Content")));
-        logMessages.forEach(System.out::println);
+        config.getRootLogger().removeAppender(appender.getName());
+        // logMessages.forEach(System.out::println);
 
     }
 
-    class MyAppender implements Appender {
-        List<LogEvent> logEvents = new ArrayList<>();
-        List<String> logMessages = new ArrayList<>();
+    static class MyAppender implements Appender {
+
+        final List<LogEvent> logEvents = Collections.synchronizedList(new ArrayList<>());
+
+        final List<String> logMessages = Collections.synchronizedList(new ArrayList<>());
+
+        public List<LogEvent> getLogEvents() {
+            return Collections.unmodifiableList(logEvents);
+        }
+
+        public List<String> getLogMessages() {
+            return Collections.unmodifiableList(logMessages);
+        }
 
         @Override
         public void append(LogEvent event) {
@@ -140,32 +179,11 @@ class FirstTestTest {
         public boolean isStopped() {
             return false;
         }
+
+
+        public void reset() {
+            logEvents.clear();
+            logMessages.clear();
+        }
     }
-
-
-    @Test
-    void logAMessageUsingDevexpertsLoggingWithMockAppender(){
-
-        List<String> logMessages = new ArrayList<>();
-        Appender appender = mock(Appender.class);
-        when(appender.ignoreExceptions()).thenReturn(true);
-        final ErrorHandler errorHandler = mock(ErrorHandler.class);
-        when(appender.getHandler()).thenReturn(errorHandler);
-        doAnswer(invocation -> {
-            final Object argument = invocation.getArgument(0);
-            if (argument instanceof LogEvent) {
-                logMessages.add(((LogEvent) argument).getMessage().getFormattedMessage());
-            }
-            return null;
-        }).when(appender).append(any());
-
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        final Configuration config = ctx.getConfiguration();
-        config.getRootLogger().addAppender(appender, Level.ALL, mock(Filter.class));
-
-        firstTest.produceAInfoLog();
-        assertThat(logMessages).hasSize(1);
-        logMessages.forEach(System.out::println);
-    }
-
 }
