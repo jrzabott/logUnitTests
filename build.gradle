@@ -6,12 +6,28 @@ group 'org.example'
 version '1.0-SNAPSHOT'
 
 repositories {
+    maven {
+        url 'https://dxfeed.jfrog.io/artifactory/maven-open'
+    }
     mavenCentral()
 }
 
 dependencies {
+    implementation 'org.junit.jupiter:junit-jupiter:5.8.1'
     testImplementation platform('org.junit:junit-bom:5.9.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    implementation 'org.assertj:assertj-core:3.19.0'
+    implementation 'org.mockito:mockito-core:5.1.1'
+
+    implementation 'com.devexperts.qd:dxlib:3.316'
+    implementation 'com.devexperts.qd:dxfeed-api:3.316'
+    implementation 'com.devexperts.qd:qds:3.316'
+    implementation 'com.devexperts.qd:qds-tools:3.316'
+
+    implementation 'org.apache.logging.log4j:log4j-api:2.19.0'
+    implementation 'org.apache.logging.log4j:log4j-core:2.19.0'
+    implementation 'ch.qos.logback:logback-classic:1.2.6'
+
 }
 
 test {
